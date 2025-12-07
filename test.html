@@ -1,0 +1,303 @@
+<!--
+Big Chat - single-file demo (HTML + JS)
+
+How to use:
+1) Save this file as `big-chat.html` and open it in the browser.
+2) You WILL need a signaling server to exchange WebRTC offers/answers/ICE. A minimal Node.js + socket.io server snippet is included below — run it on a server/localhost and set SIGNALING_SERVER to that URL.
+3) This is a simple demo for learning / prototyping. For production you must secure connections (HTTPS / WSS), handle TURN servers for NAT traversal, and add moderation.
+
+Minimal signaling server (Node.js) - save as server.js and run `node server.js`:
+
+```js
+// server.js
+const http = require('http');
+const express = require('express');
+const app = express();
+const server = http.createServer(app);
+const { Server } = require('socket.io');
+const io = new Server(server, { cors: { origin: '*' } });
+
+let waiting = null; // socket id waiting for partner
+
+io.on('connection', socket => {
+  console.log('conn', socket.id);
+
+  socket.on('join', nickname => {
+    socket.nickname = nickname || 'Anon';
+    if (waiting && waiting !== socket.id) {
+      // pair them
+      const other = io.sockets.sockets.get(waiting);
+      if (other) {
+        const room = socket.id + '#' + waiting;
+        other.join(room);
+        socket.join(room);
+        io.to(room).emit('matched', { room, peers: [other.id, socket.id] });
+        waiting = null;
+      } else {
+        waiting = socket.id;
+      }
+    } else {
+      waiting = socket.id;
+    }
+  });
+
+  socket.on('signal', ({ room, data }) => {
+    socket.to(room).emit('signal', { from: socket.id, data });
+  });
+
+  socket.on('leave', room => {
+    socket.to(room).emit('peer-left');
+    socket.leave(room);
+    if (waiting === socket.id) waiting = null;
+  });
+
+  socket.on('disconnect', () => {
+    if (waiting === socket.id) waiting = null;
+  });
+});
+
+server.listen(3000, () => console.log('Signaling server listening on :3000'));
+```
+
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Big Chat — demo</title>
+  <style>
+    :root{--accent:#0ea5e9;--bg:#0f172a}
+    body{font-family:Inter,system-ui,Segoe UI,Arial;margin:0;background:linear-gradient(180deg,#071028 0%,#0b1220 100%);color:#e6eef8;display:flex;min-height:100vh;align-items:center;justify-content:center}
+    .card{width:980px;max-width:96%;background:rgba(255,255,255,0.03);border-radius:12px;padding:18px;box-shadow:0 6px 30px rgba(2,6,23,0.6)}
+    header{display:flex;align-items:center;gap:12px}
+    h1{margin:0;font-size:20px}
+    .controls{display:flex;gap:8px;align-items:center;margin-top:12px}
+    input[type=text]{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:8px;color:inherit}
+    button{background:var(--accent);border:none;padding:8px 12px;border-radius:8px;color:#072033;cursor:pointer;font-weight:700}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit}
+    .grid{display:grid;grid-template-columns:1fr 320px;gap:12px;margin-top:14px}
+    .video-area{background:rgba(255,255,255,0.02);padding:12px;border-radius:10px;min-height:360px;display:flex;flex-direction:column;gap:8px}
+    video{width:100%;height:230px;background:#000;border-radius:8px;object-fit:cover}
+    .small{height:110px}
+    .sidebar{background:rgba(255,255,255,0.02);padding:12px;border-radius:10px}
+    .log{height:150px;overflow:auto;background:rgba(255,255,255,0.01);padding:8px;border-radius:6px;font-size:13px}
+    .chat{display:flex;gap:6px;margin-top:8px}
+    .chat input{flex:1}
+    footer{margin-top:10px;font-size:12px;color:#9fb1c8}
+    .status{font-size:13px;color:#9fb1c8}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <header>
+      <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='34' height='34'><rect rx='6' width='34' height='34' fill='%230ea5e9'/><text x='50%' y='56%' font-size='15' text-anchor='middle' fill='white' font-family='Arial' font-weight='700'>BC</text></svg>" alt="logo" style="width:44px;height:44px;border-radius:8px"/>
+      <div>
+        <h1>Big Chat - video roulette demo</h1>
+        <div class="status" id="status">disconnected</div>
+      </div>
+    </header>
+
+    <div class="controls">
+      <input id="nick" type="text" placeholder="Emri yt (p.sh. Big Chat)" value="Big Chat" />
+      <button id="btnJoin">Start (match random)</button>
+      <button id="btnLeave" class="ghost">Leave</button>
+      <button id="btnToggleAudio" class="ghost">Mute audio</button>
+      <button id="btnToggleVideo" class="ghost">Stop video</button>
+    </div>
+
+    <div class="grid">
+      <div class="video-area">
+        <div style="display:flex;gap:8px">
+          <div style="flex:1">
+            <label style="font-size:13px;margin-bottom:6px;display:block">Your camera</label>
+            <video id="localVideo" autoplay muted playsinline></video>
+          </div>
+          <div style="width:260px">
+            <label style="font-size:13px;margin-bottom:6px;display:block">Partner</label>
+            <video id="remoteVideo" autoplay playsinline></video>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="btnNext" class="ghost">Next partner</button>
+          <div style="flex:1;text-align:right;font-size:13px;color:#9fb1c8">Room: <span id="roomId">—</span></div>
+        </div>
+
+        <div class="chat">
+          <input id="chatInput" type="text" placeholder="Shkruaj mesazh (kani nuk eshte i sinkronizuar)" />
+          <button id="sendChat">Send</button>
+        </div>
+      </div>
+
+      <aside class="sidebar">
+        <div style="font-weight:700;margin-bottom:6px">Activity</div>
+        <div class="log" id="log"></div>
+        <div style="margin-top:10px">Signaling server URL:</div>
+        <input id="signalUrl" type="text" value="ws://localhost:3000" />
+        <footer>
+          This is a demo — to work well on the internet you need HTTPS, TURN servers and moderation. Use responsibly.
+        </footer>
+      </aside>
+    </div>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script>
+    // Config
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+    const logEl = document.getElementById('log');
+    const nickEl = document.getElementById('nick');
+    const signalUrlEl = document.getElementById('signalUrl');
+    const statusEl = document.getElementById('status');
+    const roomIdEl = document.getElementById('roomId');
+
+    let socket = null;
+    let pc = null;
+    let localStream = null;
+    let currentRoom = null;
+
+    function log(msg){
+      const d = document.createElement('div'); d.textContent = msg; logEl.prepend(d);
+    }
+
+    async function startLocalMedia(){
+      try{
+        localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+        localVideo.srcObject = localStream;
+        log('Local camera ready');
+      }catch(e){
+        log('Could not get camera/mic: ' + e.message);
+      }
+    }
+
+    function makePeerConnection(room){
+      pc = new RTCPeerConnection({});
+      // add our tracks
+      localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
+      pc.ontrack = e => {
+        // combine tracks into a stream
+        if (remoteVideo.srcObject !== e.streams[0]) {
+          remoteVideo.srcObject = e.streams[0];
+          log('Remote stream added');
+        }
+      };
+
+      pc.onicecandidate = e => {
+        if (e.candidate) {
+          socket.emit('signal', { room, data: { type: 'ice', candidate: e.candidate } });
+        }
+      };
+
+      return pc;
+    }
+
+    function connectSocket(url){
+      if (socket) socket.disconnect();
+      socket = io(url, { transports: ['websocket'] });
+
+      socket.on('connect', () => { statusEl.textContent = 'connected to signaling'; log('Socket connected: ' + socket.id); });
+
+      socket.on('matched', async ({ room, peers }) => {
+        log('Matched in room: ' + room);
+        currentRoom = room; roomIdEl.textContent = room;
+        // create peer connection and start negotiation (if we are the second or first)
+        makePeerConnection(room);
+        // create an offer (simple policy: lower socket id starts as offerer)
+        const offerer = peers[0] === socket.id;
+        if (offerer) {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit('signal', { room, data: { type: 'offer', sdp: offer } });
+        }
+      });
+
+      socket.on('signal', async ({ from, data }) => {
+        try{
+          if (!pc) makePeerConnection(currentRoom);
+          if (data.type === 'offer'){
+            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            socket.emit('signal', { room: currentRoom, data: { type: 'answer', sdp: answer } });
+          } else if (data.type === 'answer'){
+            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+          } else if (data.type === 'ice'){
+            await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+          }
+        }catch(e){ log('Signal handling error: '+e.message); }
+      });
+
+      socket.on('peer-left', () => {
+        log('Partner left');
+        cleanupPeer();
+      });
+
+      socket.on('disconnect', () => { statusEl.textContent = 'signal disconnected'; log('Socket disconnected'); });
+    }
+
+    function cleanupPeer(){
+      if (pc){ pc.close(); pc = null; }
+      remoteVideo.srcObject = null;
+      currentRoom = null; roomIdEl.textContent = '—';
+    }
+
+    // UI
+    document.getElementById('btnJoin').addEventListener('click', async ()=>{
+      const url = signalUrlEl.value.trim();
+      if (!url) return alert('Vendos URL të serverit të signaling');
+      connectSocket(url);
+      await startLocalMedia();
+      socket.emit('join', nickEl.value || 'Anon');
+      statusEl.textContent = 'looking for partner...';
+      log('Joining as ' + (nickEl.value || 'Anon'));
+    });
+
+    document.getElementById('btnLeave').addEventListener('click', ()=>{
+      if (socket && currentRoom) socket.emit('leave', currentRoom);
+      cleanupPeer();
+      if (socket) socket.disconnect();
+      if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream = null; localVideo.srcObject = null; }
+      statusEl.textContent = 'disconnected';
+      log('Left');
+    });
+
+    document.getElementById('btnNext').addEventListener('click', ()=>{
+      // leave current and rejoin
+      if (socket){ if (currentRoom) socket.emit('leave', currentRoom); cleanupPeer(); socket.emit('join', nickEl.value || 'Anon'); log('Searching new partner...'); }
+    });
+
+    document.getElementById('btnToggleAudio').addEventListener('click', ()=>{
+      if (!localStream) return;
+      const track = localStream.getAudioTracks()[0];
+      if (!track) return;
+      track.enabled = !track.enabled;
+      document.getElementById('btnToggleAudio').textContent = track.enabled ? 'Mute audio' : 'Unmute audio';
+    });
+
+    document.getElementById('btnToggleVideo').addEventListener('click', ()=>{
+      if (!localStream) return;
+      const track = localStream.getVideoTracks()[0];
+      if (!track) return;
+      track.enabled = !track.enabled;
+      document.getElementById('btnToggleVideo').textContent = track.enabled ? 'Stop video' : 'Start video';
+    });
+
+    // simple chat (local only) — for demo only
+    document.getElementById('sendChat').addEventListener('click', ()=>{
+      const v = document.getElementById('chatInput').value.trim();
+      if(!v) return;
+      log('Me: ' + v);
+      document.getElementById('chatInput').value = '';
+    });
+
+    // cleanup on page close
+    window.addEventListener('beforeunload', ()=>{
+      if (socket) socket.disconnect();
+    });
+  </script>
+</body>
+</html>
