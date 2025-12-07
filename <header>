@@ -1,0 +1,13 @@
+<header>
+  <img src="data:image/svg+xml;utf8,
+  <svg xmlns='http://www.w3.org/2000/svg' width='44' height='44'>
+    <rect rx='8' width='44' height='44' fill='%230ea5e9'/>
+    <text x='50%' y='55%' font-size='16' text-anchor='middle' fill='white' font-family='Arial' font-weight='700'>BC</text>
+  </svg>" 
+  alt="Big Chat Logo" style="width:44px;height:44px;border-radius:8px"/>
+  
+  <div>
+    <h1>Big Chat - video roulette demo</h1>
+    <div class="status" id="status">disconnected</div>
+  </div>
+</header>
