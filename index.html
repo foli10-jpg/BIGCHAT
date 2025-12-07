@@ -1,59 +1,250 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="sq">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BigChat</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #1c1c1c;
-            color: #fff;
-            text-align: center;
-            padding: 20px;
-        }
-        video {
-            width: 60%;
-            max-width: 600px;
-            border: 2px solid #00f;
-            margin: 20px 0;
-            border-radius: 10px;
-        }
-        button {
-            padding: 10px 20px;
-            font-size: 18px;
-            border: none;
-            border-radius: 5px;
-            background-color: #00f;
-            color: #fff;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #0066cc;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Big Chat — demo</title>
+  <meta name="description" content="Big Chat - video roulette demo" />
+  <style>
+    :root{--accent:#06b6d4;--bg:#071028}
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Arial;margin:0;background:linear-gradient(180deg,#071028 0%,#0b1220 100%);color:#e6eef8;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:18px}
+    .card{width:980px;max-width:100%;background:rgba(255,255,255,0.03);border-radius:12px;padding:18px;box-shadow:0 6px 30px rgba(2,6,23,0.6)}
+    header{display:flex;align-items:center;gap:12px}
+    h1{margin:0;font-size:20px}
+    .controls{display:flex;gap:8px;align-items:center;margin-top:12px}
+    input[type=text]{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:8px;color:inherit}
+    button{background:var(--accent);border:none;padding:8px 12px;border-radius:8px;color:#042430;cursor:pointer;font-weight:700}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit}
+    .grid{display:grid;grid-template-columns:1fr 320px;gap:12px;margin-top:14px}
+    .video-area{background:rgba(255,255,255,0.02);padding:12px;border-radius:10px;min-height:360px;display:flex;flex-direction:column;gap:8px}
+    video{width:100%;height:230px;background:#000;border-radius:8px;object-fit:cover}
+    .sidebar{background:rgba(255,255,255,0.02);padding:12px;border-radius:10px}
+    .log{height:150px;overflow:auto;background:rgba(255,255,255,0.01);padding:8px;border-radius:6px;font-size:13px}
+    .chat{display:flex;gap:6px;margin-top:8px}
+    .chat input{flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    footer{margin-top:10px;font-size:12px;color:#9fb1c8}
+    .status{font-size:13px;color:#9fb1c8}
+    .small-note{font-size:12px;color:#9fb1c8;margin-top:8px}
+  </style>
 </head>
 <body>
-    <h1>BigChat</h1>
-    <p>Video chat me njerëz të rastësishëm!</p>
-    <video id="localVideo" autoplay playsinline></video>
-    <br>
-    <button id="startBtn">Lidhu</button>
+  <div class="card">
+    <header>
+      <div style="width:44px;height:44px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;color:#042430">BC</div>
+      <div>
+        <h1>Big Chat - video roulette</h1>
+        <div class="status" id="status">disconnected</div>
+      </div>
+    </header>
 
-    <script>
-        const startBtn = document.getElementById('startBtn');
-        const localVideo = document.getElementById('localVideo');
+    <div class="controls">
+      <input id="nick" type="text" placeholder="Emri yt (p.sh. Big Chat)" value="Big Chat" />
+      <button id="btnJoin">Start (match random)</button>
+      <button id="btnLeave" class="ghost">Leave</button>
+      <button id="btnToggleAudio" class="ghost">Mute audio</button>
+      <button id="btnToggleVideo" class="ghost">Stop video</button>
+    </div>
 
-        startBtn.addEventListener('click', async () => {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                localVideo.srcObject = stream;
-                alert("Video aktiv! Për video chat me të tjerët, duhet server WebRTC.");
-            } catch (err) {
-                console.error(err);
-                alert("Nuk mund të hap kamerën. Kontrollo lejet.");
-            }
-        });
-    </script>
+    <div class="grid">
+      <div class="video-area">
+        <div style="display:flex;gap:8px">
+          <div style="flex:1">
+            <label style="font-size:13px;margin-bottom:6px;display:block">Kamera jote</label>
+            <video id="localVideo" autoplay muted playsinline></video>
+          </div>
+          <div style="width:260px">
+            <label style="font-size:13px;margin-bottom:6px;display:block">Partner</label>
+            <video id="remoteVideo" autoplay playsinline></video>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="btnNext" class="ghost">Next partner</button>
+          <div style="flex:1;text-align:right;font-size:13px;color:#9fb1c8">Room: <span id="roomId">—</span></div>
+        </div>
+
+        <div class="chat">
+          <input id="chatInput" type="text" placeholder="Shkruaj mesazh (demo - lokal)" />
+          <button id="sendChat">Send</button>
+        </div>
+
+        <div class="small-note">Për të funksionuar si videochat online duhet të vendosësh URL të serverit të signaling (Socket.IO) më poshtë.</div>
+      </div>
+
+      <aside class="sidebar">
+        <div style="font-weight:700;margin-bottom:6px">Activity</div>
+        <div class="log" id="log"></div>
+        <div style="margin-top:10px">Signaling server URL (p.sh. wss://bigchat-server.onrender.com):</div>
+        <input id="signalUrl" type="text" value="wss://REPLACE_WITH_YOUR_SERVER_URL" />
+        <footer>
+          This is a demo — for production add HTTPS/WSS, TURN server, moderation and reporting.
+        </footer>
+      </aside>
+    </div>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script>
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+    const logEl = document.getElementById('log');
+    const nickEl = document.getElementById('nick');
+    const signalUrlEl = document.getElementById('signalUrl');
+    const statusEl = document.getElementById('status');
+    const roomIdEl = document.getElementById('roomId');
+
+    let socket = null;
+    let pc = null;
+    let localStream = null;
+    let currentRoom = null;
+
+    function log(msg){
+      const d = document.createElement('div'); d.textContent = msg; logEl.prepend(d);
+    }
+
+    async function startLocalMedia(){
+      try{
+        localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+        localVideo.srcObject = localStream;
+        log('Local camera ready');
+      }catch(e){
+        log('Could not get camera/mic: ' + e.message);
+        alert('Nuk u morën lejet e kamerës/mikrofonit: ' + e.message);
+      }
+    }
+
+    function makePeerConnection(room){
+      pc = new RTCPeerConnection({
+        // Në production vendos iceServers me TURN
+        iceServers: []
+      });
+
+      if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
+      pc.ontrack = e => {
+        if (remoteVideo.srcObject !== e.streams[0]) {
+          remoteVideo.srcObject = e.streams[0];
+          log('Remote stream added');
+        }
+      };
+
+      pc.onicecandidate = e => {
+        if (e.candidate && socket) {
+          socket.emit('signal', { room, data: { type: 'ice', candidate: e.candidate } });
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        log('Peer connection state: ' + pc.connectionState);
+      };
+
+      return pc;
+    }
+
+    function connectSocket(url){
+      if (socket) socket.disconnect();
+      try {
+        socket = io(url, { transports: ['websocket'] });
+      } catch(e){
+        alert('Gabim me socket URL: ' + e.message);
+        return;
+      }
+
+      socket.on('connect', () => { statusEl.textContent = 'connected to signaling'; log('Socket connected: ' + socket.id); });
+
+      socket.on('matched', async ({ room, peers }) => {
+        log('Matched in room: ' + room);
+        currentRoom = room; roomIdEl.textContent = room;
+        makePeerConnection(room);
+        const offerer = peers[0] === socket.id;
+        if (offerer) {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit('signal', { room, data: { type: 'offer', sdp: offer } });
+        }
+      });
+
+      socket.on('signal', async ({ from, data }) => {
+        try{
+          if (!pc) makePeerConnection(currentRoom);
+          if (data.type === 'offer'){
+            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            socket.emit('signal', { room: currentRoom, data: { type: 'answer', sdp: answer } });
+          } else if (data.type === 'answer'){
+            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+          } else if (data.type === 'ice'){
+            await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+          }
+        }catch(e){ log('Signal handling error: '+e.message); }
+      });
+
+      socket.on('peer-left', () => {
+        log('Partner left');
+        cleanupPeer();
+      });
+
+      socket.on('disconnect', () => { statusEl.textContent = 'signal disconnected'; log('Socket disconnected'); });
+    }
+
+    function cleanupPeer(){
+      if (pc){ pc.close(); pc = null; }
+      remoteVideo.srcObject = null;
+      currentRoom = null; roomIdEl.textContent = '—';
+    }
+
+    // UI
+    document.getElementById('btnJoin').addEventListener('click', async ()=>{
+      const url = signalUrlEl.value.trim();
+      if (!url) return alert('Vendos URL të serverit të signaling (p.sh. wss://your-server.onrender.com)');
+      connectSocket(url);
+      await startLocalMedia();
+      socket.emit('join', nickEl.value || 'Anon');
+      statusEl.textContent = 'looking for partner...';
+      log('Joining as ' + (nickEl.value || 'Anon'));
+    });
+
+    document.getElementById('btnLeave').addEventListener('click', ()=>{
+      if (socket && currentRoom) socket.emit('leave', currentRoom);
+      cleanupPeer();
+      if (socket) socket.disconnect();
+      if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream = null; localVideo.srcObject = null; }
+      statusEl.textContent = 'disconnected';
+      log('Left');
+    });
+
+    document.getElementById('btnNext').addEventListener('click', ()=>{
+      if (socket){ if (currentRoom) socket.emit('leave', currentRoom); cleanupPeer(); socket.emit('join', nickEl.value || 'Anon'); log('Searching new partner...'); }
+    });
+
+    document.getElementById('btnToggleAudio').addEventListener('click', ()=>{
+      if (!localStream) return;
+      const track = localStream.getAudioTracks()[0];
+      if (!track) return;
+      track.enabled = !track.enabled;
+      document.getElementById('btnToggleAudio').textContent = track.enabled ? 'Mute audio' : 'Unmute audio';
+    });
+
+    document.getElementById('btnToggleVideo').addEventListener('click', ()=>{
+      if (!localStream) return;
+      const track = localStream.getVideoTracks()[0];
+      if (!track) return;
+      track.enabled = !track.enabled;
+      document.getElementById('btnToggleVideo').textContent = track.enabled ? 'Stop video' : 'Start video';
+    });
+
+    document.getElementById('sendChat').addEventListener('click', ()=>{
+      const v = document.getElementById('chatInput').value.trim();
+      if(!v) return;
+      log('Me: ' + v);
+      document.getElementById('chatInput').value = '';
+    });
+
+    window.addEventListener('beforeunload', ()=>{
+      if (socket) socket.disconnect();
+    });
+  </script>
 </body>
 </html>
