@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BigChat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1c1c1c;
+            color: #fff;
+            text-align: center;
+            padding: 20px;
+        }
+        video {
+            width: 60%;
+            max-width: 600px;
+            border: 2px solid #00f;
+            margin: 20px 0;
+            border-radius: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 18px;
+            border: none;
+            border-radius: 5px;
+            background-color: #00f;
+            color: #fff;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0066cc;
+        }
+    </style>
+</head>
+<body>
+    <h1>BigChat</h1>
+    <p>Video chat me njerëz të rastësishëm!</p>
+    <video id="localVideo" autoplay playsinline></video>
+    <br>
+    <button id="startBtn">Lidhu</button>
+
+    <script>
+        const startBtn = document.getElementById('startBtn');
+        const localVideo = document.getElementById('localVideo');
+
+        startBtn.addEventListener('click', async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                localVideo.srcObject = stream;
+                alert("Video aktiv! Për video chat me të tjerët, duhet server WebRTC.");
+            } catch (err) {
+                console.error(err);
+                alert("Nuk mund të hap kamerën. Kontrollo lejet.");
+            }
+        });
+    </script>
+</body>
+</html>
