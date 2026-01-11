@@ -298,6 +298,30 @@ server.listen(3000, () => console.log('Signaling server listening on :3000'));
     window.addEventListener('beforeunload', ()=>{
       if (socket) socket.disconnect();
     });
+
+@media (max-width: 600px) {
+  .chat-box {
+    border-radius: 0;
+  }
+
+  h1 {
+    font-size: 20px;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
   </script>
 </body>
 </html>
