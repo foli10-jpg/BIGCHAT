@@ -175,6 +175,49 @@ function connect(){
       socket.emit("signal",{room,data:{type:"offer",sdp:offer}});
     }
   });
+  function makePeerConnection(room){
+  pc = new RTCPeerConnection({
+    iceServers: [
+      {
+        urls: "stun:stun.metered.ca:80"
+      },
+      {
+        urls: "turn:global.turn.metered.live:80",
+        username: "24d5ffcdbf4f7b9718bbfa84",
+        credential: "v4+0z+tifx71WlHx"
+      },
+      {
+        urls: "turn:global.turn.metered.live:443",
+        username: "24d5ffcdbf4f7b9718bbfa84",
+        credential: "v4+0z+tifx71WlHx"
+      },
+      {
+        urls: "turns:global.turn.metered.live:443",
+        username: "24d5ffcdbf4f7b9718bbfa84",
+        credential: "v4+0z+tifx71WlHx"
+      }
+    ]
+  });
+
+  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
+  pc.ontrack = e => {
+    remoteVideo.srcObject = e.streams[0];
+    log("Remote stream connected");
+  };
+
+  pc.onicecandidate = e => {
+    if (e.candidate) {
+      socket.emit("signal", {
+        room,
+        data: { type: "ice", candidate: e.candidate }
+      });
+    }
+  };
+
+  return pc;
+}
+
 
   socket.on("signal",async d=>{
     if(d.data.type==="offer"){
@@ -205,6 +248,7 @@ btnLeave.onclick=()=>{
   statusEl.textContent="disconnected";
 };
 </script>
+
 
 </body>
 </html>
