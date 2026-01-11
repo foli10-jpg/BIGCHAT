@@ -198,6 +198,18 @@ function connect(){
       }
     ]
   });
+    let onlineUsers = 0;
+
+io.on("connection", (socket) => {
+  onlineUsers++;
+  io.emit("online-count", onlineUsers);
+
+  socket.on("disconnect", () => {
+    onlineUsers--;
+    io.emit("online-count", onlineUsers);
+  });
+});
+
 
   localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
@@ -217,6 +229,36 @@ function connect(){
 
   return pc;
 }
+  <div id="onlineCounter">Online: 0</div>
+socket.on("online-count", (count) => {
+  document.getElementById("onlineCounter").innerText =
+    "Online: " + count;
+});
+<input id="msg" placeholder="Shkruaj mesazh..." />
+<button onclick="sendMsg()">Send</button>
+
+<div id="chatBox"></div>
+function sendMsg() {
+  const text = document.getElementById("msg").value;
+  if (!text) return;
+
+  socket.emit("chat-message", {
+    room: currentRoom,
+    message: text
+  });
+
+  document.getElementById("msg").value = "";
+}
+
+socket.on("chat-message", (data) => {
+  const div = document.createElement("div");
+  div.innerText = data.message;
+  document.getElementById("chatBox").appendChild(div);
+});
+socket.on("chat-message", ({ room, message }) => {
+  socket.to(room).emit("chat-message", { message });
+});
+
 
 
   socket.on("signal",async d=>{
