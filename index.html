@@ -1,119 +1,86 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Big Chat — demo</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Big Chat – video roulette</title>
 
 <style>
-:root{--accent:#0ea5e9}
 body{
-  font-family:Inter,system-ui,Segoe UI,Arial;
   margin:0;
-  background:linear-gradient(180deg,#071028 0%,#0b1220 100%);
-  color:#e6eef8;
+  font-family:Arial,system-ui;
+  background:#0b1220;
+  color:#fff;
   display:flex;
-  min-height:100vh;
+  justify-content:center;
   align-items:center;
-  justify-content:center
+  min-height:100vh;
 }
 .card{
-  width:980px;
-  max-width:96%;
-  background:rgba(255,255,255,0.03);
+  width:900px;
+  max-width:95%;
+  background:#111827;
+  padding:16px;
   border-radius:12px;
-  padding:18px;
-  box-shadow:0 6px 30px rgba(2,6,23,0.6)
-}
-header{display:flex;align-items:center;gap:12px}
-h1{margin:0;font-size:20px}
-.controls{display:flex;gap:8px;align-items:center;margin-top:12px}
-input{
-  background:rgba(255,255,255,0.03);
-  border:1px solid rgba(255,255,255,0.06);
-  padding:8px 10px;
-  border-radius:8px;
-  color:inherit
-}
-button{
-  background:var(--accent);
-  border:none;
-  padding:8px 12px;
-  border-radius:8px;
-  color:#072033;
-  cursor:pointer;
-  font-weight:700
-}
-button.ghost{
-  background:transparent;
-  border:1px solid rgba(255,255,255,0.06);
-  color:inherit
-}
-.grid{
-  display:grid;
-  grid-template-columns:1fr 320px;
-  gap:12px;
-  margin-top:14px
-}
-.video-area{
-  background:rgba(255,255,255,0.02);
-  padding:12px;
-  border-radius:10px
 }
 video{
   width:100%;
-  height:230px;
-  background:#000;
+  height:220px;
+  background:black;
   border-radius:8px;
-  object-fit:cover
 }
-.sidebar{
-  background:rgba(255,255,255,0.02);
-  padding:12px;
-  border-radius:10px
+.grid{
+  display:grid;
+  grid-template-columns:1fr 300px;
+  gap:10px;
 }
 .log{
-  height:150px;
+  height:120px;
   overflow:auto;
-  background:rgba(255,255,255,0.01);
-  padding:8px;
+  background:#020617;
+  padding:6px;
   border-radius:6px;
-  font-size:13px
+  font-size:13px;
 }
-.status{font-size:13px;color:#9fb1c8}
+button{
+  background:#0ea5e9;
+  border:none;
+  padding:8px 12px;
+  border-radius:6px;
+  font-weight:bold;
+  cursor:pointer;
+}
+input{width:100%;padding:6px;margin-top:4px}
 </style>
 </head>
 
 <body>
 <div class="card">
-<header>
-<img src="data:image/svg+xml;utf8,
-<svg xmlns='http://www.w3.org/2000/svg' width='34' height='34'>
-<rect rx='6' width='34' height='34' fill='%230ea5e9'/>
-<text x='50%' y='56%' font-size='15' text-anchor='middle' fill='white'
-font-family='Arial' font-weight='700'>BC</text></svg>">
-<div>
-<h1>Big Chat – video roulette</h1>
-<div class="status" id="status">disconnected</div>
-</div>
-</header>
+<h2>Big Chat – video roulette</h2>
+<div id="status">disconnected</div>
 
-<div class="controls">
-<input id="nick" value="Big Chat">
 <button id="btnJoin">Start</button>
-<button id="btnLeave" class="ghost">Leave</button>
-</div>
+<button id="btnNext">Next</button>
 
 <div class="grid">
-<div class="video-area">
-<video id="localVideo" autoplay muted playsinline></video>
-<video id="remoteVideo" autoplay playsinline></video>
-</div>
+  <div>
+    <video id="localVideo" autoplay muted playsinline></video>
+    <video id="remoteVideo" autoplay playsinline></video>
+  </div>
 
-<div class="sidebar">
-<b>Activity</b>
-<div class="log" id="log"></div>
-</div>
+  <div>
+    <b>Activity</b>
+    <div class="log" id="log"></div>
+
+    <hr>
+    <div id="online">Online: 0</div>
+
+    <hr>
+    <b>Chat</b>
+    <div id="chatBox" class="log"></div>
+    <input id="msg" placeholder="Shkruaj mesazh">
+    <button onclick="sendMsg()">Send</button>
+  </div>
 </div>
 </div>
 
@@ -124,38 +91,44 @@ const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
 const logEl = document.getElementById("log");
 const statusEl = document.getElementById("status");
+const chatBox = document.getElementById("chatBox");
 
 let socket, pc, localStream, room;
 
-function log(t){const d=document.createElement("div");d.textContent=t;logEl.prepend(d);}
+function log(t){
+  const d=document.createElement("div");
+  d.textContent=t;
+  logEl.prepend(d);
+}
 
 async function startMedia(){
   localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
   localVideo.srcObject = localStream;
 }
 
-function makePeerConnection(roomId){
+function makePeerConnection(){
   pc = new RTCPeerConnection({
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
+    iceServers:[
+      { urls:"stun:stun.metered.ca:80" },
       {
-        urls: [
-          "turn:global.relay.metered.ca:80",
-          "turn:global.relay.metered.ca:443"
+        urls:[
+          "turn:global.turn.metered.live:80",
+          "turn:global.turn.metered.live:443",
+          "turns:global.turn.metered.live:443"
         ],
-        username: "24d5ffcdbf4f7b9718bbfa84",
-        credential: "v4+0z+tifx71WlHx"
+        username:"24d5ffcdbf4f7b9718bbfa84",
+        credential:"v4+0z+tifx71WlHx"
       }
     ]
   });
 
   localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
 
-  pc.ontrack = e => remoteVideo.srcObject = e.streams[0];
+  pc.ontrack=e=>remoteVideo.srcObject=e.streams[0];
 
-  pc.onicecandidate = e=>{
+  pc.onicecandidate=e=>{
     if(e.candidate){
-      socket.emit("signal",{room:roomId,data:{type:"ice",candidate:e.candidate}});
+      socket.emit("signal",{room,data:{type:"ice",candidate:e.candidate}});
     }
   };
 }
@@ -163,11 +136,11 @@ function makePeerConnection(roomId){
 function connect(){
   socket = io("https://bigchat-signal-server1.onrender.com",{transports:["websocket"]});
 
-  socket.on("connect",()=>{statusEl.textContent="connected";});
+  socket.on("connect",()=>statusEl.textContent="connected");
 
   socket.on("matched",async d=>{
     room=d.room;
-    makePeerConnection(room);
+    makePeerConnection();
 
     if(d.peers[0]===socket.id){
       const offer=await pc.createOffer();
@@ -175,122 +148,51 @@ function connect(){
       socket.emit("signal",{room,data:{type:"offer",sdp:offer}});
     }
   });
-  function makePeerConnection(room){
-  pc = new RTCPeerConnection({
-    iceServers: [
-      {
-        urls: "stun:stun.metered.ca:80"
-      },
-      {
-        urls: "turn:global.turn.metered.live:80",
-        username: "24d5ffcdbf4f7b9718bbfa84",
-        credential: "v4+0z+tifx71WlHx"
-      },
-      {
-        urls: "turn:global.turn.metered.live:443",
-        username: "24d5ffcdbf4f7b9718bbfa84",
-        credential: "v4+0z+tifx71WlHx"
-      },
-      {
-        urls: "turns:global.turn.metered.live:443",
-        username: "24d5ffcdbf4f7b9718bbfa84",
-        credential: "v4+0z+tifx71WlHx"
-      }
-    ]
-  });
-    let onlineUsers = 0;
-
-io.on("connection", (socket) => {
-  onlineUsers++;
-  io.emit("online-count", onlineUsers);
-
-  socket.on("disconnect", () => {
-    onlineUsers--;
-    io.emit("online-count", onlineUsers);
-  });
-});
-
-
-  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-
-  pc.ontrack = e => {
-    remoteVideo.srcObject = e.streams[0];
-    log("Remote stream connected");
-  };
-
-  pc.onicecandidate = e => {
-    if (e.candidate) {
-      socket.emit("signal", {
-        room,
-        data: { type: "ice", candidate: e.candidate }
-      });
-    }
-  };
-
-  return pc;
-}
-  <div id="onlineCounter">Online: 0</div>
-socket.on("online-count", (count) => {
-  document.getElementById("onlineCounter").innerText =
-    "Online: " + count;
-});
-<input id="msg" placeholder="Shkruaj mesazh..." />
-<button onclick="sendMsg()">Send</button>
-
-<div id="chatBox"></div>
-function sendMsg() {
-  const text = document.getElementById("msg").value;
-  if (!text) return;
-
-  socket.emit("chat-message", {
-    room: currentRoom,
-    message: text
-  });
-
-  document.getElementById("msg").value = "";
-}
-
-socket.on("chat-message", (data) => {
-  const div = document.createElement("div");
-  div.innerText = data.message;
-  document.getElementById("chatBox").appendChild(div);
-});
-socket.on("chat-message", ({ room, message }) => {
-  socket.to(room).emit("chat-message", { message });
-});
-
-
 
   socket.on("signal",async d=>{
     if(d.data.type==="offer"){
-      await pc.setRemoteDescription(new RTCSessionDescription(d.data.sdp));
+      await pc.setRemoteDescription(d.data.sdp);
       const ans=await pc.createAnswer();
       await pc.setLocalDescription(ans);
       socket.emit("signal",{room,data:{type:"answer",sdp:ans}});
     }
     if(d.data.type==="answer"){
-      await pc.setRemoteDescription(new RTCSessionDescription(d.data.sdp));
+      await pc.setRemoteDescription(d.data.sdp);
     }
     if(d.data.type==="ice"){
-      await pc.addIceCandidate(new RTCIceCandidate(d.data.candidate));
+      await pc.addIceCandidate(d.data.candidate);
     }
   });
+
+  socket.on("chat-message",d=>{
+    const div=document.createElement("div");
+    div.textContent=d.message;
+    chatBox.appendChild(div);
+  });
+
+  socket.on("online-count",c=>{
+    document.getElementById("online").innerText="Online: "+c;
+  });
+}
+
+function sendMsg(){
+  if(!msg.value || !room) return;
+  socket.emit("chat-message",{room,message:msg.value});
+  msg.value="";
 }
 
 btnJoin.onclick=async()=>{
   await startMedia();
   connect();
-  socket.emit("join","user");
+  socket.emit("join");
   log("Searching partner...");
 };
 
-btnLeave.onclick=()=>{
-  if(socket) socket.disconnect();
+btnNext.onclick=()=>{
   if(pc) pc.close();
-  statusEl.textContent="disconnected";
+  socket.emit("next");
+  log("Next partner...");
 };
 </script>
-
-
 </body>
 </html>
