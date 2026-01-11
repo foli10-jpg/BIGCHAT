@@ -3,21 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Big Chat</title>
+<title>Big Chat – Verify</title>
 
 <style>
 body{
   margin:0;
-  font-family:Arial;
   background:#0b1220;
+  font-family:Arial;
   color:white;
 }
-.hidden{display:none}
 .center{
-  height:100vh;
   display:flex;
   justify-content:center;
   align-items:center;
+  height:100vh;
 }
 .box{
   background:#111827;
@@ -38,35 +37,23 @@ button{
   font-weight:bold;
   cursor:pointer;
 }
-.card{
-  padding:15px;
+.code{
+  display:flex;
+  justify-content:space-between;
 }
-video{
-  width:100%;
-  height:220px;
-  background:black;
-  border-radius:8px;
+.code input{
+  width:42px;
+  font-size:20px;
+  text-align:center;
 }
-.grid{
-  display:grid;
-  grid-template-columns:1fr 300px;
-  gap:10px;
-}
-.log{
-  background:#020617;
-  height:120px;
-  overflow:auto;
-  padding:6px;
-  border-radius:6px;
-  font-size:13px;
-}
+.hidden{display:none}
 </style>
 </head>
 
 <body>
 
-<!-- LOGIN -->
-<div id="login" class="center">
+<!-- STEP 1 -->
+<div id="step1" class="center">
   <div class="box">
     <h2>👤 Big Chat</h2>
     <input id="name" placeholder="Emri">
@@ -77,145 +64,56 @@ video{
   </div>
 </div>
 
-<!-- VIDEO CHAT -->
-<div id="app" class="hidden">
-  <div class="card">
-    <h3>Big Chat – video roulette</h3>
-    <div id="status">disconnected</div>
-
-    <button onclick="join()">Start</button>
-    <button onclick="next()">Next</button>
-
-    <div class="grid">
-      <div>
-        <video id="localVideo" autoplay muted></video>
-        <video id="remoteVideo" autoplay></video>
-      </div>
-
-      <div>
-        <b>Activity</b>
-        <div id="log" class="log"></div>
-        <hr>
-        <div id="online">Online: 0</div>
-        <hr>
-        <div class="log" id="chatBox"></div>
-        <input id="msg" placeholder="Mesazh">
-        <button onclick="sendMsg()">Send</button>
-      </div>
+<!-- STEP 2 -->
+<div id="step2" class="center hidden">
+  <div class="box">
+    <h3>📩 Shkruaj kodin</h3>
+    <div class="code">
+      <input maxlength="1">
+      <input maxlength="1">
+      <input maxlength="1">
+      <input maxlength="1">
+      <input maxlength="1">
+      <input maxlength="1">
     </div>
+    <button onclick="verifyCode()">Verifiko</button>
+    <p id="error"></p>
   </div>
 </div>
 
-<!-- LIBRARIES -->
-<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-
 <script>
-// 🔥 FIREBASE
-firebase.initializeApp({
-  apiKey:"API_KEY",
-  authDomain:"DOMAIN",
-  databaseURL:"DB_URL"
-});
-const auth=firebase.auth();
-const db=firebase.database();
+let generatedCode="";
 
-// 📩 EMAIL LOGIN
 function sendCode(){
-  if(age.value<18) return alert("Vetëm 18+");
-  if(!email.value||!name.value) return alert("Plotëso krejt");
+  if(age.value < 18) return alert("Vetëm 18+");
+  if(!email.value || !name.value) return alert("Plotëso krejt");
 
-  localStorage.email=email.value;
-  localStorage.name=name.value;
+  // 🔐 SIMULIM (backend e gjeneron)
+  generatedCode = Math.floor(100000 + Math.random()*900000).toString();
 
-  auth.sendSignInLinkToEmail(email.value,{
-    url:location.href,
-    handleCodeInApp:true
-  }).then(()=>{
-    info.innerText="📩 Kontrollo email-in";
-  });
+  console.log("KODI (backend):",generatedCode);
+
+  /*
+  👉 KËTU SHKON BACKEND REAL:
+  POST /send-otp
+  { email, code }
+  */
+
+  step1.classList.add("hidden");
+  step2.classList.remove("hidden");
 }
 
-if(auth.isSignInWithEmailLink(location.href)){
-  auth.signInWithEmailLink(localStorage.email,location.href)
-  .then(()=>{
-    login.classList.add("hidden");
-    app.classList.remove("hidden");
-    setOnline();
-  });
-}
+function verifyCode(){
+  const inputs=document.querySelectorAll(".code input");
+  let code="";
+  inputs.forEach(i=>code+=i.value);
 
-// 👥 ONLINE
-function setOnline(){
-  const uid=auth.currentUser.uid;
-  const ref=db.ref("online/"+uid);
-  ref.set(true);
-  ref.onDisconnect().remove();
-
-  db.ref("online").on("value",s=>{
-    online.innerText="Online: "+s.numChildren();
-  });
-}
-
-// 🎥 VIDEO + SOCKET
-let socket,pc,stream,room;
-
-async function join(){
-  stream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-  localVideo.srcObject=stream;
-
-  socket=io("https://bigchat-signal-server1.onrender.com",{transports:["websocket"]});
-  socket.emit("join");
-
-  socket.on("matched",async d=>{
-    room=d.room;
-    pc=new RTCPeerConnection({
-      iceServers:[
-        {urls:"stun:stun.metered.ca:80"},
-        {
-          urls:["turn:global.turn.metered.live:443","turns:global.turn.metered.live:443"],
-          username:"24d5ffcdbf4f7b9718bbfa84",
-          credential:"v4+0z+tifx71WlHx"
-        }
-      ]
-    });
-
-    stream.getTracks().forEach(t=>pc.addTrack(t,stream));
-    pc.ontrack=e=>remoteVideo.srcObject=e.streams[0];
-    pc.onicecandidate=e=>e.candidate&&socket.emit("signal",{room,data:{type:"ice",candidate:e.candidate}});
-
-    if(d.peers[0]===socket.id){
-      const offer=await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit("signal",{room,data:{type:"offer",sdp:offer}});
-    }
-  });
-
-  socket.on("signal",async d=>{
-    if(d.data.type==="offer"){
-      await pc.setRemoteDescription(d.data.sdp);
-      const ans=await pc.createAnswer();
-      await pc.setLocalDescription(ans);
-      socket.emit("signal",{room,data:{type:"answer",sdp:ans}});
-    }
-    if(d.data.type==="answer") await pc.setRemoteDescription(d.data.sdp);
-    if(d.data.type==="ice") await pc.addIceCandidate(d.data.candidate);
-  });
-
-  socket.on("online-count",c=>online.innerText="Online: "+c);
-}
-
-function next(){
-  if(pc) pc.close();
-  socket.emit("next");
-}
-
-function sendMsg(){
-  if(!msg.value) return;
-  socket.emit("chat-message",{room,message:msg.value});
-  msg.value="";
+  if(code===generatedCode){
+    alert("✅ Verified – hyn në video chat");
+    location.href="video.html";
+  }else{
+    error.innerText="❌ Kodi gabim";
+  }
 }
 </script>
 
