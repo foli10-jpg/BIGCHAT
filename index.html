@@ -224,5 +224,49 @@
       if (socket) socket.disconnect();
     });
   </script>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBgVX2VXqjDUTfY5xvQQgicF1SPXEwFAqY",
+  authDomain: "bigchat-fabf5.firebaseapp.com",
+  projectId: "bigchat-fabf5",
+  storageBucket: "bigchat-fabf5.firebasestorage.app",
+  messagingSenderId: "107691410326",
+  appId: "1:107691410326:web:b3d19297a47f2d886813b7"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+</script>
+<script>
+const messagesRef = db.collection("messages");
+
+function sendMessage() {
+  const text = document.getElementById("message").value;
+  if (text.trim() === "") return;
+
+  messagesRef.add({
+    text: text,
+    time: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  document.getElementById("message").value = "";
+}
+
+messagesRef.orderBy("time").onSnapshot(snapshot => {
+  const box = document.getElementById("chat");
+  box.innerHTML = "";
+  snapshot.forEach(doc => {
+    const p = document.createElement("p");
+    p.textContent = doc.data().text;
+    box.appendChild(p);
+  });
+});
+</script>
+
+  
 </body>
 </html>
