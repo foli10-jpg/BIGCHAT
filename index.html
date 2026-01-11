@@ -1,201 +1,198 @@
-<!DOCTYPE html>
-<html lang="sq">
+<!doctype html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Big Chat</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Big Chat – video roulette</title>
 
 <style>
 body{
   margin:0;
+  font-family:Arial,system-ui;
   background:#0b1220;
-  font-family:Arial;
-  color:white;
-}
-.center{
+  color:#fff;
   display:flex;
   justify-content:center;
   align-items:center;
-  height:100vh;
+  min-height:100vh;
 }
-.box{
+.card{
+  width:900px;
+  max-width:95%;
   background:#111827;
-  padding:25px;
+  padding:16px;
   border-radius:12px;
-  width:330px;
-}
-input,button{
-  width:100%;
-  padding:12px;
-  margin-top:10px;
-  border-radius:8px;
-  border:none;
-  font-size:15px;
-}
-button{
-  background:#0ea5e9;
-  color:white;
-  font-weight:bold;
-  cursor:pointer;
-}
-.hidden{display:none}
-.code{
-  display:flex;
-  justify-content:space-between;
-}
-.code input{
-  width:42px;
-  font-size:20px;
-  text-align:center;
-}
-#chat{
-  padding:10px;
-}
-.top{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
 }
 video{
   width:100%;
-  border-radius:10px;
+  height:220px;
   background:black;
+  border-radius:8px;
 }
-.chatbox{
-  background:#020617;
-  padding:10px;
+.grid{
+  display:grid;
+  grid-template-columns:1fr 300px;
+  gap:10px;
+}
+.log{
   height:120px;
   overflow:auto;
-  border-radius:8px;
-  margin-top:10px;
+  background:#020617;
+  padding:6px;
+  border-radius:6px;
+  font-size:13px;
 }
-.msg{
-  display:flex;
+button{
+  background:#0ea5e9;
+  border:none;
+  padding:8px 12px;
+  border-radius:6px;
+  font-weight:bold;
+  cursor:pointer;
 }
-.msg input{flex:1}
-.msg button{width:80px}
+input{width:100%;padding:6px;margin-top:4px}
 </style>
 </head>
 
 <body>
+<div class="card">
+<h2>Big Chat – video roulette</h2>
+<div id="status">disconnected</div>
 
-<!-- LOGIN -->
-<div id="login" class="center">
-  <div class="box">
-    <h2>👤 Big Chat</h2>
+<button id="btnJoin">Start</button>
+<button id="btnNext">Next</button>
 
-    <input id="name" placeholder="Emri">
-    <input id="email" placeholder="Email">
-    <input id="age" type="number" placeholder="Mosha (18+)">
+<div class="grid">
+  <div>
+    <video id="localVideo" autoplay muted playsinline></video>
+    <video id="remoteVideo" autoplay playsinline></video>
+  </div>
 
-    <button onclick="sendCode()">Dërgo kodin</button>
-    <p id="info"></p>
+  <div>
+    <b>Activity</b>
+    <div class="log" id="log"></div>
+
+    <hr>
+    <div id="online">Online: 0</div>
+
+    <hr>
+    <b>Chat</b>
+    <div id="chatBox" class="log"></div>
+    <input id="msg" placeholder="Shkruaj mesazh">
+    <button onclick="sendMsg()">Send</button>
   </div>
 </div>
-
-<!-- CHAT -->
-<div id="chat" class="hidden">
-  <div class="top">
-    <b>Big Chat</b>
-    <span id="online">Online: 0</span>
-  </div>
-
-  <video id="local" autoplay muted playsinline></video>
-
-  <button onclick="start()">▶ Start</button>
-  <button onclick="leave()">⏹ Leave</button>
-  <button onclick="report()">🚫 Report</button>
-
-  <div class="chatbox" id="chatbox"></div>
-
-  <div class="msg">
-    <input id="text" placeholder="Shkruaj mesazh">
-    <button onclick="send()">Send</button>
-  </div>
 </div>
 
-<!-- FIREBASE -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script>
-// 🔥 Firebase config
-firebase.initializeApp({
-  apiKey: "AIzaSyBgVX2VXqjDUTfY5xvQQgicF1SPXEwFAqY",
-  authDomain: "bigchat-fabf5.firebaseapp.com",
-  databaseURL: "https://bigchat-fabf5-default-rtdb.firebaseio.com"
-});
+const localVideo = document.getElementById("localVideo");
+const remoteVideo = document.getElementById("remoteVideo");
+const logEl = document.getElementById("log");
+const statusEl = document.getElementById("status");
+const chatBox = document.getElementById("chatBox");
 
-const auth = firebase.auth();
-const db   = firebase.database();
+let socket, pc, localStream, room;
 
-// 📩 SEND EMAIL CODE
-function sendCode(){
-  if(age.value < 18) return alert("Vetëm 18+");
-  if(!email.value || !name.value) return alert("Plotëso krejt");
+function log(t){
+  const d=document.createElement("div");
+  d.textContent=t;
+  logEl.prepend(d);
+}
 
-  localStorage.email = email.value;
-  localStorage.name  = name.value;
+async function startMedia(){
+  localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+  localVideo.srcObject = localStream;
+}
 
-  auth.sendSignInLinkToEmail(email.value,{
-    url: location.href,
-    handleCodeInApp:true
-  }).then(()=>{
-    info.innerText="📩 Kodi u dërgua në email";
+function makePeerConnection(){
+  pc = new RTCPeerConnection({
+    iceServers:[
+      { urls:"stun:stun.metered.ca:80" },
+      {
+        urls:[
+          "turn:global.turn.metered.live:80",
+          "turn:global.turn.metered.live:443",
+          "turns:global.turn.metered.live:443"
+        ],
+        username:"24d5ffcdbf4f7b9718bbfa84",
+        credential:"v4+0z+tifx71WlHx"
+      }
+    ]
+  });
+
+  localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+
+  pc.ontrack=e=>remoteVideo.srcObject=e.streams[0];
+
+  pc.onicecandidate=e=>{
+    if(e.candidate){
+      socket.emit("signal",{room,data:{type:"ice",candidate:e.candidate}});
+    }
+  };
+}
+
+function connect(){
+  socket = io("https://bigchat-signal-server1.onrender.com",{transports:["websocket"]});
+
+  socket.on("connect",()=>statusEl.textContent="connected");
+
+  socket.on("matched",async d=>{
+    room=d.room;
+    makePeerConnection();
+
+    if(d.peers[0]===socket.id){
+      const offer=await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit("signal",{room,data:{type:"offer",sdp:offer}});
+    }
+  });
+
+  socket.on("signal",async d=>{
+    if(d.data.type==="offer"){
+      await pc.setRemoteDescription(d.data.sdp);
+      const ans=await pc.createAnswer();
+      await pc.setLocalDescription(ans);
+      socket.emit("signal",{room,data:{type:"answer",sdp:ans}});
+    }
+    if(d.data.type==="answer"){
+      await pc.setRemoteDescription(d.data.sdp);
+    }
+    if(d.data.type==="ice"){
+      await pc.addIceCandidate(d.data.candidate);
+    }
+  });
+
+  socket.on("chat-message",d=>{
+    const div=document.createElement("div");
+    div.textContent=d.message;
+    chatBox.appendChild(div);
+  });
+
+  socket.on("online-count",c=>{
+    document.getElementById("online").innerText="Online: "+c;
   });
 }
 
-// 🔐 VERIFY EMAIL LINK
-if(auth.isSignInWithEmailLink(location.href)){
-  auth.signInWithEmailLink(localStorage.email,location.href)
-    .then(()=>{
-      login.classList.add("hidden");
-      chat.classList.remove("hidden");
-      onlineUser();
-      camera();
-    });
+function sendMsg(){
+  if(!msg.value || !room) return;
+  socket.emit("chat-message",{room,message:msg.value});
+  msg.value="";
 }
 
-// 👥 ONLINE COUNTER
-function onlineUser(){
-  const uid = auth.currentUser.uid;
-  const ref = db.ref("online/"+uid);
-  ref.set(true);
-  ref.onDisconnect().remove();
+btnJoin.onclick=async()=>{
+  await startMedia();
+  connect();
+  socket.emit("join");
+  log("Searching partner...");
+};
 
-  db.ref("online").on("value",s=>{
-    online.innerText="Online: "+s.numChildren();
-  });
-}
-
-// 📷 CAMERA
-function camera(){
-  navigator.mediaDevices.getUserMedia({video:true,audio:true})
-    .then(s=>local.srcObject=s);
-}
-
-// 💬 CHAT (demo – lokal)
-function send(){
-  if(!text.value) return;
-  chatbox.innerHTML += "<div>"+localStorage.name+": "+text.value+"</div>";
-  text.value="";
-}
-
-// 🚫 REPORT
-function report(){
-  db.ref("reports").push({
-    uid:auth.currentUser.uid,
-    time:Date.now()
-  });
-  alert("User u raportua");
-}
-
-// ▶ START / LEAVE (placeholder)
-function start(){ alert("Searching partner..."); }
-function leave(){ location.reload(); }
-
+btnNext.onclick=()=>{
+  if(pc) pc.close();
+  socket.emit("next");
+  log("Next partner...");
+};
 </script>
-
 </body>
 </html>
